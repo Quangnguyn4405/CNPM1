@@ -57,6 +57,10 @@ def handle_client(ip, port, conn, addr, routes):
 def handle_client_callback(server, ip, port, conn, addr, routes):
     """Handle client in callback/selector mode.
 
+    The selector detected readability while the socket was non-blocking.
+    We restore blocking mode here inside the thread so that the HttpAdapter's
+    synchronous recv/send calls work correctly without changing the selector loop.
+
     :param server: Server socket (unused but required by selector).
     :param ip (str): Server IP.
     :param port (int): Server port.
@@ -64,6 +68,7 @@ def handle_client_callback(server, ip, port, conn, addr, routes):
     :param addr (tuple): Client address.
     :param routes (dict): Route handlers.
     """
+    conn.setblocking(True)
     try:
         daemon = HttpAdapter(ip, port, conn, addr, routes)
         daemon.handle_client(conn, addr, routes)
@@ -178,8 +183,7 @@ def run_backend(ip, port, routes):
                         _addr = key.data[4]
                         conn = key.fileobj
                         sel.unregister(conn)
-                        conn.setblocking(True)
-                        # Handle in a thread to avoid blocking the loop
+                        # Socket stays non-blocking here; the thread restores blocking mode
                         t = threading.Thread(
                             target=handle_client_callback,
                             args=(server, _ip, _port, conn, _addr, _routes),

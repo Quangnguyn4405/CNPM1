@@ -97,31 +97,30 @@ class PeerNode:
     def _handle_incoming(self, conn, addr):
         """Handle an incoming peer connection: read messages.
 
+        Uses a persistent per-connection buffer so partial TCP frames
+        (JSON split across multiple recv calls) are correctly reassembled.
+
         :param conn (socket): Incoming socket.
         :param addr (tuple): Peer address.
         """
+        conn.settimeout(60.0)
+        buf = b""
         try:
-            conn.settimeout(60.0)
             while self._running:
-                data = b""
-                while True:
-                    try:
-                        chunk = conn.recv(4096)
-                        if not chunk:
-                            return
-                        data += chunk
-                        # Try to parse JSON (newline-delimited)
-                        if b"\n" in data:
-                            break
-                    except socket.timeout:
-                        if data:
-                            break
-                        continue
+                try:
+                    chunk = conn.recv(4096)
+                    if not chunk:
+                        break
+                    buf += chunk
+                except socket.timeout:
+                    continue
+                except BlockingIOError:
+                    continue
 
-                # Process newline-delimited JSON messages
-                messages = data.decode("utf-8", errors="replace").strip().split("\n")
-                for raw in messages:
-                    raw = raw.strip()
+                # Drain all complete newline-terminated messages from the buffer
+                while b"\n" in buf:
+                    line, buf = buf.split(b"\n", 1)
+                    raw = line.decode("utf-8", errors="replace").strip()
                     if not raw:
                         continue
                     try:
@@ -133,7 +132,20 @@ class PeerNode:
         except Exception as e:
             print("[PeerNode] Connection error from {}: {}".format(addr, e))
         finally:
+            self._cleanup_peer(conn)
             conn.close()
+
+    def _cleanup_peer(self, conn):
+        """Remove a disconnected peer socket from connected_peers.
+
+        :param conn (socket): The socket that closed.
+        """
+        with self._lock:
+            dead = [key for key, info in self.connected_peers.items()
+                    if info.get("socket") is conn]
+            for key in dead:
+                self.connected_peers.pop(key, None)
+                print("[PeerNode] Peer {} disconnected".format(key))
 
     def _process_message(self, msg, conn, addr):
         """Process a received peer message.
@@ -209,8 +221,13 @@ class PeerNode:
         if peer_port == self.port and peer_ip in (self.ip, "127.0.0.1", "0.0.0.0", "localhost"):
             print("[PeerNode] Refused self-connection to {}:{}".format(peer_ip, peer_port))
             return False
+        # Refuse duplicate connection
+        with self._lock:
+            if (peer_ip, peer_port) in self.connected_peers:
+                print("[PeerNode] Already connected to {}:{}".format(peer_ip, peer_port))
+                return True
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(5.0)
             sock.connect((peer_ip, peer_port))
 
@@ -223,36 +240,47 @@ class PeerNode:
             }) + "\n"
             sock.sendall(handshake.encode("utf-8"))
 
-            # Wait for ack
-            data = sock.recv(4096).decode("utf-8", errors="replace").strip()
+            # Wait for ack — buffer until newline so partial frames are handled
+            ack_buf = b""
+            while b"\n" not in ack_buf:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                ack_buf += chunk
+            data = ack_buf.decode("utf-8", errors="replace").strip()
             if data:
                 try:
                     ack = json.loads(data)
-                    peer_user = ack.get("username", "unknown")
-                    with self._lock:
-                        self.connected_peers[(peer_ip, peer_port)] = {
-                            "username": peer_user,
-                            "socket": sock,
-                        }
-                    print("[PeerNode] Connected to {} ({}:{})".format(
-                        peer_user, peer_ip, peer_port
-                    ))
-
-                    # Start reading from this peer in background
-                    t = threading.Thread(
-                        target=self._handle_incoming,
-                        args=(sock, (peer_ip, peer_port)),
-                        daemon=True
-                    )
-                    t.start()
-                    return True
                 except json.JSONDecodeError:
-                    pass
+                    sock.close()
+                    return False
+
+                peer_user = ack.get("username", "unknown")
+                with self._lock:
+                    self.connected_peers[(peer_ip, peer_port)] = {
+                        "username": peer_user,
+                        "socket": sock,
+                    }
+                print("[PeerNode] Connected to {} ({}:{})".format(
+                    peer_user, peer_ip, peer_port
+                ))
+
+                # Start reading from this peer in background
+                t = threading.Thread(
+                    target=self._handle_incoming,
+                    args=(sock, (peer_ip, peer_port)),
+                    daemon=True
+                )
+                t.start()
+                return True
+
+            sock.close()
             return False
         except Exception as e:
             print("[PeerNode] Failed to connect to {}:{} - {}".format(
                 peer_ip, peer_port, e
             ))
+            sock.close()
             return False
 
     def send_message(self, peer_ip, peer_port, message, channel="general", sender=None):
@@ -349,7 +377,11 @@ class PeerNode:
             return True
         except Exception as e:
             print("[PeerNode] Send failed to {}:{}: {}".format(peer_ip, peer_port, e))
-            # Remove dead peer
+            # Close the dead socket and remove peer entry
+            try:
+                peer_info["socket"].close()
+            except Exception:
+                pass
             with self._lock:
                 self.connected_peers.pop((peer_ip, peer_port), None)
             return False
