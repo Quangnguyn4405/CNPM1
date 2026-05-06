@@ -1,398 +1,564 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>HybridChat - CO3093/CO3094</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; }
-    .container { max-width: 900px; margin: 0 auto; padding: 10px; }
-    h1 { text-align: center; color: #0f3460; background: #e0e0e0; padding: 8px; }
-    .panel { background: #16213e; border: 1px solid #0f3460; margin: 8px 0; padding: 10px; }
-    .panel h3 { color: #53d8fb; margin-bottom: 6px; }
-    label { display: inline-block; width: 80px; }
-    input[type=text], input[type=password], input[type=number] {
-      background: #0a0a1a; color: #e0e0e0; border: 1px solid #0f3460;
-      padding: 4px 8px; margin: 2px 0; width: 200px;
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
+
+    body {
+      font-family: monospace;
+      background: #1a1a2e;
+      color: #e0e0e0;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 10px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #0f3460;
+      background: #e0e0e0;
+      padding: 8px;
+    }
+
+    .panel {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      margin: 8px 0;
+      padding: 10px;
+    }
+
+    .panel h3 {
+      color: #53d8fb;
+      margin-bottom: 6px;
+    }
+
+    label {
+      display: inline-block;
+      width: 80px;
+    }
+
+    input[type=text],
+    input[type=password],
+    input[type=number] {
+      background: #0a0a1a;
+      color: #e0e0e0;
+      border: 1px solid #0f3460;
+      padding: 4px 8px;
+      margin: 2px 0;
+      width: 200px;
+    }
+
     button {
-      background: #0f3460; color: #fff; border: none; padding: 6px 14px;
-      cursor: pointer; margin: 2px;
+      background: #0f3460;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      cursor: pointer;
+      margin: 2px;
     }
-    button:hover { background: #53d8fb; color: #000; }
-    #log { background: #0a0a1a; padding: 8px; height: 200px; overflow-y: auto;
-           border: 1px solid #333; font-size: 12px; white-space: pre-wrap; }
-    #messages { background: #0a0a1a; padding: 8px; height: 250px; overflow-y: auto;
-                border: 1px solid #333; font-size: 13px; }
-    .msg { margin: 3px 0; padding: 3px; border-bottom: 1px solid #1a1a2e; }
-    .msg .sender { color: #53d8fb; font-weight: bold; }
-    .msg .time { color: #666; font-size: 11px; }
-    .msg .text { color: #e0e0e0; }
-    .status { color: #4caf50; font-size: 12px; }
-    .error { color: #f44336; }
-    .row { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
-    .notif { background: #2a1a3e; padding: 4px; margin: 2px 0; border-left: 3px solid #53d8fb; }
+
+    button:hover {
+      background: #53d8fb;
+      color: #000;
+    }
+
+    #log {
+      background: #0a0a1a;
+      padding: 8px;
+      height: 200px;
+      overflow-y: auto;
+      border: 1px solid #333;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+
+    #messages {
+      background: #0a0a1a;
+      padding: 15px;
+      height: 350px;
+      overflow-y: auto;
+      border: 1px solid #333;
+      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      scroll-behavior: smooth;
+    }
+
+    .msg-wrapper {
+      display: flex;
+      width: 100%;
+    }
+
+    .msg-wrapper.own {
+      justify-content: flex-end;
+    }
+
+    .msg-wrapper.other {
+      justify-content: flex-start;
+    }
+
+    .msg-bubble {
+      max-width: 75%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      position: relative;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    .msg-wrapper.own .msg-bubble {
+      background: #53d8fb;
+      color: #0a0a1a;
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg-wrapper.other .msg-bubble {
+      background: #16213e;
+      color: #e0e0e0;
+      border: 1px solid #0f3460;
+      border-bottom-left-radius: 4px;
+    }
+
+    .msg-sender {
+      font-size: 11px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+
+    .msg-wrapper.own .msg-sender {
+      display: none;
+    }
+
+    .msg-wrapper.other .msg-sender {
+      color: #53d8fb;
+    }
+
+    .msg-time {
+      font-size: 10px;
+      margin-top: 5px;
+      text-align: right;
+      opacity: 0.6;
+    }
+
+    .msg-text {
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
+
+    .status {
+      color: #4caf50;
+      font-size: 12px;
+    }
+
+    .error {
+      color: #f44336;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin: 4px 0;
+    }
+
+    .notif {
+      background: #2a1a3e;
+      padding: 4px;
+      margin: 2px 0;
+      border-left: 3px solid #53d8fb;
+    }
   </style>
 </head>
+
 <body>
-<div class="container">
-  <h1>HybridChat - Non-blocking P2P Chat</h1>
+  <div class="container">
+    <h1>HybridChat - Non-blocking P2P Chat</h1>
 
-  <!-- Login Panel -->
-  <div class="panel">
-    <h3>1. Authentication</h3>
-    <div class="row">
-      <label>Username:</label>
-      <input type="text" id="username" value="user1">
-      <label>Password:</label>
-      <input type="password" id="password" value="password1">
-      <button onclick="doLogin()">Login</button>
-      <button onclick="doLogout()">Logout</button>
-      <span id="auth-status" class="status"></span>
-    </div>
-    <div class="row" style="margin-top:6px;">
-      <label style="width:120px;color:#aaa;font-size:11px;">New account:</label>
-      <input type="text" id="reg-username" placeholder="username (≥3 chars)" style="width:160px;">
-      <input type="password" id="reg-password" placeholder="password (≥4 chars)" style="width:150px;">
-      <button onclick="doRegister()">Register</button>
-      <button onclick="doChangePassword()">Change Password</button>
-      <button onclick="doViewUsers()">View Users</button>
-      <span id="reg-status" class="status" style="font-size:11px;"></span>
-    </div>
-    <div id="user-list" style="margin-top:6px; font-size:12px; display:none;
+    <!-- Login Panel -->
+    <div class="panel">
+      <h3>1. Authentication</h3>
+      <div class="row">
+        <label>Username:</label>
+        <input type="text" id="username" value="user1">
+        <label>Password:</label>
+        <input type="password" id="password" value="password1">
+        <button onclick="doLogin()">Login</button>
+        <button onclick="doLogout()">Logout</button>
+        <span id="auth-status" class="status"></span>
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <label style="width:120px;color:#aaa;font-size:11px;">New account:</label>
+        <input type="text" id="reg-username" placeholder="username (≥3 chars)" style="width:160px;">
+        <input type="password" id="reg-password" placeholder="password (≥4 chars)" style="width:150px;">
+        <button onclick="doRegister()">Register</button>
+        <button onclick="doChangePassword()">Change Password</button>
+        <button onclick="doViewUsers()">View Users</button>
+        <span id="reg-status" class="status" style="font-size:11px;"></span>
+      </div>
+      <div id="user-list" style="margin-top:6px; font-size:12px; display:none;
          background:#0a0a1a; border:1px solid #0f3460; padding:6px;"></div>
-  </div>
-
-  <!-- Peer Registration -->
-  <div class="panel">
-    <h3>2. Register Peer (Client-Server)</h3>
-    <div class="row">
-      <label>Peer IP:</label>
-      <input type="text" id="peer-ip" value="127.0.0.1">
-      <label>Peer Port:</label>
-      <input type="number" id="peer-port" value="7000">
-      <button id="btn-register" onclick="doSubmitInfo()">Register</button>
-      <button id="btn-getlist" onclick="doGetList()">Get Peer List</button>
-      <span id="register-status" class="status"></span>
     </div>
-    <div id="peer-list" style="margin-top:6px; font-size:12px; color:#53d8fb;"></div>
-  </div>
 
-  <!-- P2P Connection -->
-  <div class="panel">
-    <h3>3. Peer-to-Peer Connection</h3>
-    <div class="row">
-      <label>Target IP:</label>
-      <input type="text" id="target-ip" value="127.0.0.1">
-      <label>Target Port:</label>
-      <input type="number" id="target-port" value="7001">
-      <button id="btn-connect" onclick="doConnectPeer()">Connect</button>
-      <button id="btn-status" onclick="doPeerStatus()">Status</button>
-      <span id="connect-status" class="status"></span>
+    <!-- Peer Registration -->
+    <div class="panel">
+      <h3>2. Register Peer (Client-Server)</h3>
+      <div class="row">
+        <label>Peer IP:</label>
+        <input type="text" id="peer-ip" value="127.0.0.1">
+        <label>Peer Port:</label>
+        <input type="number" id="peer-port" value="7000">
+        <button id="btn-register" onclick="doSubmitInfo()">Register</button>
+        <button id="btn-getlist" onclick="doGetList()">Get Peer List</button>
+        <span id="register-status" class="status"></span>
+      </div>
+      <div id="peer-list" style="margin-top:6px; font-size:12px; color:#53d8fb;"></div>
     </div>
-    <div id="p2p-info" style="margin-top:6px; font-size:12px; color:#53d8fb;"></div>
-  </div>
 
-  <!-- Chat -->
-  <div class="panel">
-    <h3>4. Chat</h3>
-    <div class="row">
-      <label>Channel:</label>
-      <input type="text" id="channel" value="general">
-      <button onclick="doGetChannels()">List Channels</button>
-      <button onclick="doGetMessages()">Refresh</button>
-      <button onclick="doGetNotifications()">Notifications</button>
-      <span id="notif-badge" style="color:#f44336; font-weight:bold; display:none;"></span>
+    <!-- P2P Connection -->
+    <div class="panel">
+      <h3>3. Peer-to-Peer Connection</h3>
+      <div class="row">
+        <label>Target IP:</label>
+        <input type="text" id="target-ip" value="127.0.0.1">
+        <label>Target Port:</label>
+        <input type="number" id="target-port" value="7001">
+        <button id="btn-connect" onclick="doConnectPeer()">Connect</button>
+        <button id="btn-status" onclick="doPeerStatus()">Status</button>
+        <span id="connect-status" class="status"></span>
+      </div>
+      <div id="p2p-info" style="margin-top:6px; font-size:12px; color:#53d8fb;"></div>
     </div>
-    <div id="messages"></div>
-    <div class="row" style="margin-top:6px;">
-      <input type="text" id="msg-input" style="flex:1;width:auto;" placeholder="Type message..." onkeydown="if(event.key==='Enter') doBroadcast()">
-      <button id="btn-broadcast" onclick="doBroadcast()">Broadcast</button>
-      <button id="btn-senddirect" onclick="doSendDirect()">Send Direct</button>
-      <span id="send-status" class="status" style="font-size:11px;"></span>
+
+    <!-- Chat -->
+    <div class="panel">
+      <h3>4. Chat</h3>
+      <div class="row">
+        <label>Channel:</label>
+        <input type="text" id="channel" value="general">
+        <button onclick="doGetChannels()">List Channels</button>
+        <button onclick="doGetMessages()">Refresh</button>
+        <button onclick="doGetNotifications()">Notifications</button>
+        <span id="notif-badge" style="color:#f44336; font-weight:bold; display:none;"></span>
+      </div>
+      <div id="messages"></div>
+      <div class="row" style="margin-top:6px;">
+        <input type="text" id="msg-input" style="flex:1;width:auto;" placeholder="Type message..."
+          onkeydown="if(event.key==='Enter') doBroadcast()">
+        <button id="btn-broadcast" onclick="doBroadcast()">Broadcast</button>
+        <button id="btn-senddirect" onclick="doSendDirect()">Send Direct</button>
+        <span id="send-status" class="status" style="font-size:11px;"></span>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="panel">
+      <h3>Server Log</h3>
+      <div id="log"></div>
     </div>
   </div>
 
-  <!-- Log -->
-  <div class="panel">
-    <h3>Server Log</h3>
-    <div id="log"></div>
-  </div>
-</div>
+  <script>
+    let sessionId = '';
+    let _sending = false;
+    let currentUser = '';
 
-<script>
-  let sessionId = '';
-  let _sending = false;
-
-  function log(msg, isError) {
-    const el = document.getElementById('log');
-    const cls = isError ? 'error' : '';
-    const ts = new Date().toLocaleTimeString();
-    el.innerHTML += '<span class="' + cls + '">[' + ts + '] ' + msg + '</span>\n';
-    el.scrollTop = el.scrollHeight;
-  }
-
-  function setStatus(id, msg, isError) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = msg;
-    el.className = isError ? 'error' : 'status';
-  }
-
-  function btnBusy(id, busy) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.disabled = busy;
-    el.style.opacity = busy ? '0.5' : '1';
-  }
-
-  async function apiCall(method, path, body) {
-    const opts = { method: method, headers: {'Content-Type': 'application/json'} };
-    if (body && method !== 'GET' && method !== 'HEAD') {
-      opts.body = JSON.stringify(body);
-    } else if (body && (method === 'GET' || method === 'HEAD')) {
-      const qs = Object.entries(body).map(([k,v]) => encodeURIComponent(k)+'='+encodeURIComponent(v)).join('&');
-      path = path + (path.includes('?') ? '&' : '?') + qs;
+    function log(msg, isError) {
+      const el = document.getElementById('log');
+      const cls = isError ? 'error' : '';
+      const ts = new Date().toLocaleTimeString();
+      el.innerHTML += '<span class="' + cls + '">[' + ts + '] ' + msg + '</span>\n';
+      el.scrollTop = el.scrollHeight;
     }
-    if (sessionId) {
-      opts.headers['X-Session-Id'] = sessionId;
+
+    function setStatus(id, msg, isError) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = msg;
+      el.className = isError ? 'error' : 'status';
     }
-    try {
-      const r = await fetch(path, opts);
-      const text = await r.text();
-      try { return JSON.parse(text); } catch(e) { return {raw: text}; }
-    } catch(e) {
-      log('Request failed: ' + e.message, true);
-      return {error: e.message};
+
+    function btnBusy(id, busy) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.disabled = busy;
+      el.style.opacity = busy ? '0.5' : '1';
     }
-  }
 
-  async function doLogin() {
-    const u = document.getElementById('username').value;
-    const p = document.getElementById('password').value;
-    const res = await apiCall('POST', '/login', {username: u, password: p});
-    log('LOGIN: ' + JSON.stringify(res));
-    if (res.session_id) {
-      sessionId = res.session_id;
-      document.getElementById('auth-status').textContent = 'Logged in as ' + u;
-      document.getElementById('auth-status').className = 'status';
-    } else {
-      setStatus('auth-status', 'Login failed: ' + (res.error || ''), true);
+    async function apiCall(method, path, body) {
+      const opts = { method: method, headers: { 'Content-Type': 'application/json' } };
+      if (body && method !== 'GET' && method !== 'HEAD') {
+        opts.body = JSON.stringify(body);
+      } else if (body && (method === 'GET' || method === 'HEAD')) {
+        const qs = Object.entries(body).map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
+        path = path + (path.includes('?') ? '&' : '?') + qs;
+      }
+      if (sessionId) {
+        opts.headers['X-Session-Id'] = sessionId;
+      }
+      try {
+        const r = await fetch(path, opts);
+        const text = await r.text();
+        try { return JSON.parse(text); } catch (e) { return { raw: text }; }
+      } catch (e) {
+        log('Request failed: ' + e.message, true);
+        return { error: e.message };
+      }
     }
-  }
 
-  async function doLogout() {
-    const res = await apiCall('POST', '/logout');
-    log('LOGOUT: ' + JSON.stringify(res));
-    sessionId = '';
-    setStatus('auth-status', 'Logged out', false);
-  }
-
-  async function doRegister() {
-    const u = document.getElementById('reg-username').value.trim();
-    const p = document.getElementById('reg-password').value;
-    if (!u || !p) { setStatus('reg-status', 'Enter username and password', true); return; }
-    const res = await apiCall('POST', '/register', {username: u, password: p});
-    log('REGISTER: ' + JSON.stringify(res));
-    if (res.status === 'registered') {
-      setStatus('reg-status', res.message, false);
-      document.getElementById('username').value = u;
-      document.getElementById('password').value = p;
-    } else {
-      setStatus('reg-status', res.error || 'Error', true);
+    async function doLogin() {
+      const u = document.getElementById('username').value;
+      const p = document.getElementById('password').value;
+      const res = await apiCall('POST', '/login', { username: u, password: p });
+      log('LOGIN: ' + JSON.stringify(res));
+      if (res.session_id) {
+        sessionId = res.session_id;
+        currentUser = u;
+        document.getElementById('auth-status').textContent = 'Logged in as ' + u;
+        document.getElementById('auth-status').className = 'status';
+      } else {
+        setStatus('auth-status', 'Login failed: ' + (res.error || ''), true);
+      }
     }
-  }
 
-  async function doViewUsers() {
-    const res = await apiCall('GET', '/users');
-    const el = document.getElementById('user-list');
-    if (res.users) {
-      el.style.display = 'block';
-      el.innerHTML = '<b style="color:#53d8fb;">Registered accounts (' + res.count + '):</b><br>' +
-        res.users.map(function(u) {
-          return '&nbsp;&nbsp;<span style="color:#53d8fb;">' + escHtml(u.username) +
-            '</span> / <span style="color:#aaa;">' + escHtml(u.password) + '</span>';
-        }).join('<br>');
+    async function doLogout() {
+      const res = await apiCall('POST', '/logout');
+      log('LOGOUT: ' + JSON.stringify(res));
+      sessionId = '';
+      setStatus('auth-status', 'Logged out', false);
     }
-  }
 
-  async function doChangePassword() {
-    const u = document.getElementById('reg-username').value.trim() || document.getElementById('username').value.trim();
-    const oldP = document.getElementById('password').value;
-    const newP = document.getElementById('reg-password').value;
-    if (!u || !oldP || !newP) { setStatus('reg-status', 'Fill username, current password, new password', true); return; }
-    const res = await apiCall('POST', '/change-password', {username: u, old_password: oldP, new_password: newP});
-    log('CHANGE-PW: ' + JSON.stringify(res));
-    if (res.status === 'changed') {
-      setStatus('reg-status', res.message, false);
-      document.getElementById('password').value = newP;
-    } else {
-      setStatus('reg-status', res.error || 'Error', true);
+    async function doRegister() {
+      const u = document.getElementById('reg-username').value.trim();
+      const p = document.getElementById('reg-password').value;
+      if (!u || !p) { setStatus('reg-status', 'Enter username and password', true); return; }
+      const res = await apiCall('POST', '/register', { username: u, password: p });
+      log('REGISTER: ' + JSON.stringify(res));
+      if (res.status === 'registered') {
+        setStatus('reg-status', res.message, false);
+        document.getElementById('username').value = u;
+        document.getElementById('password').value = p;
+      } else {
+        setStatus('reg-status', res.error || 'Error', true);
+      }
     }
-  }
 
-  async function doSubmitInfo() {
-    const ip = document.getElementById('peer-ip').value;
-    const port = parseInt(document.getElementById('peer-port').value);
-    const u = document.getElementById('username').value;
-    btnBusy('btn-register', true);
-    setStatus('register-status', 'Registering...', false);
-    const res = await apiCall('POST', '/submit-info', {username: u, ip: ip, port: port});
-    btnBusy('btn-register', false);
-    log('SUBMIT-INFO: ' + JSON.stringify(res));
-    if (res.status === 'registered') {
-      setStatus('register-status', 'Registered as ' + res.username + ' on ' + res.ip + ':' + res.port, false);
-    } else {
-      setStatus('register-status', 'Error: ' + (res.error || JSON.stringify(res)), true);
+    async function doViewUsers() {
+      const res = await apiCall('GET', '/users');
+      const el = document.getElementById('user-list');
+      if (res.users) {
+        el.style.display = 'block';
+        el.innerHTML = '<b style="color:#53d8fb;">Registered accounts (' + res.count + '):</b><br>' +
+          res.users.map(function (u) {
+            return '&nbsp;&nbsp;<span style="color:#53d8fb;">' + escHtml(u.username) +
+              '</span> / <span style="color:#aaa;">' + escHtml(u.password) + '</span>';
+          }).join('<br>');
+      }
     }
-  }
 
-  async function doGetList() {
-    btnBusy('btn-getlist', true);
-    const res = await apiCall('GET', '/get-list');
-    btnBusy('btn-getlist', false);
-    log('GET-LIST: ' + JSON.stringify(res));
-    const el = document.getElementById('peer-list');
-    if (res.peers && res.peers.length > 0) {
-      el.innerHTML = 'Active peers (' + res.count + '): ' +
-        res.peers.map(function(p) {
-          return '<b>' + p.username + '</b> @ ' + p.ip + ':' + p.port;
-        }).join(' | ');
-    } else {
-      el.innerHTML = 'No peers registered yet.';
+    async function doChangePassword() {
+      const u = document.getElementById('reg-username').value.trim() || document.getElementById('username').value.trim();
+      const oldP = document.getElementById('password').value;
+      const newP = document.getElementById('reg-password').value;
+      if (!u || !oldP || !newP) { setStatus('reg-status', 'Fill username, current password, new password', true); return; }
+      const res = await apiCall('POST', '/change-password', { username: u, old_password: oldP, new_password: newP });
+      log('CHANGE-PW: ' + JSON.stringify(res));
+      if (res.status === 'changed') {
+        setStatus('reg-status', res.message, false);
+        document.getElementById('password').value = newP;
+      } else {
+        setStatus('reg-status', res.error || 'Error', true);
+      }
     }
-  }
 
-  async function doConnectPeer() {
-    const ip = document.getElementById('target-ip').value;
-    const port = parseInt(document.getElementById('target-port').value);
-    btnBusy('btn-connect', true);
-    setStatus('connect-status', 'Connecting...', false);
-    const res = await apiCall('POST', '/connect-peer', {ip: ip, port: port});
-    btnBusy('btn-connect', false);
-    log('CONNECT-PEER: ' + JSON.stringify(res));
-    if (res.status === 'connected') {
-      setStatus('connect-status', 'Connected to ' + res.target_ip + ':' + res.target_port, false);
-      doPeerStatus();
-    } else {
-      setStatus('connect-status', 'Failed: ' + (res.error || JSON.stringify(res)), true);
+    async function doSubmitInfo() {
+      const ip = document.getElementById('peer-ip').value;
+      const port = parseInt(document.getElementById('peer-port').value);
+      const u = document.getElementById('username').value;
+      btnBusy('btn-register', true);
+      setStatus('register-status', 'Registering...', false);
+      const res = await apiCall('POST', '/submit-info', { username: u, ip: ip, port: port });
+      btnBusy('btn-register', false);
+      log('SUBMIT-INFO: ' + JSON.stringify(res));
+      if (res.status === 'registered') {
+        setStatus('register-status', 'Registered as ' + res.username + ' on ' + res.ip + ':' + res.port, false);
+      } else {
+        setStatus('register-status', 'Error: ' + (res.error || JSON.stringify(res)), true);
+      }
     }
-  }
 
-  async function doPeerStatus() {
-    btnBusy('btn-status', true);
-    const res = await apiCall('GET', '/peer-status');
-    btnBusy('btn-status', false);
-    log('PEER-STATUS: ' + JSON.stringify(res));
-    const el = document.getElementById('p2p-info');
-    if (res.status === 'active') {
-      const peers = res.connected_peers || [];
-      el.innerHTML = 'Me: <b>' + res.username + '</b> @ ' + res.listen_address +
-        ' | Connected peers (' + res.peer_count + '): ' +
-        (peers.length ? peers.map(function(p){ return p.username + '@' + p.ip + ':' + p.port; }).join(', ') : 'none');
-    } else {
-      el.innerHTML = 'Peer not initialized — click Register first.';
+    async function doGetList() {
+      btnBusy('btn-getlist', true);
+      const res = await apiCall('GET', '/get-list');
+      btnBusy('btn-getlist', false);
+      log('GET-LIST: ' + JSON.stringify(res));
+      const el = document.getElementById('peer-list');
+      if (res.peers && res.peers.length > 0) {
+        el.innerHTML = 'Active peers (' + res.count + '): ' +
+          res.peers.map(function (p) {
+            return '<b>' + p.username + '</b> @ ' + p.ip + ':' + p.port;
+          }).join(' | ');
+      } else {
+        el.innerHTML = 'No peers registered yet.';
+      }
     }
-  }
 
-  async function doBroadcast() {
-    if (_sending) return;
-    const msg = document.getElementById('msg-input').value.trim();
-    const ch = document.getElementById('channel').value;
-    if (!msg) return;
-    _sending = true;
-    btnBusy('btn-broadcast', true);
-    btnBusy('btn-senddirect', true);
-    setStatus('send-status', 'Sending...', false);
-    const res = await apiCall('POST', '/broadcast-peer', {message: msg, channel: ch});
-    _sending = false;
-    btnBusy('btn-broadcast', false);
-    btnBusy('btn-senddirect', false);
-    log('BROADCAST: ' + JSON.stringify(res));
-    if (res.status === 'broadcast_sent') {
-      document.getElementById('msg-input').value = '';
-      setStatus('send-status', 'Broadcast sent to ' + res.peers_reached + ' peer(s)', false);
-      doGetMessages();
-    } else {
-      setStatus('send-status', 'Error: ' + (res.error || JSON.stringify(res)), true);
+    async function doConnectPeer() {
+      const ip = document.getElementById('target-ip').value;
+      const port = parseInt(document.getElementById('target-port').value);
+      btnBusy('btn-connect', true);
+      setStatus('connect-status', 'Connecting...', false);
+      const res = await apiCall('POST', '/connect-peer', { ip: ip, port: port });
+      btnBusy('btn-connect', false);
+      log('CONNECT-PEER: ' + JSON.stringify(res));
+      if (res.status === 'connected') {
+        setStatus('connect-status', 'Connected to ' + res.target_ip + ':' + res.target_port, false);
+        doPeerStatus();
+      } else {
+        setStatus('connect-status', 'Failed: ' + (res.error || JSON.stringify(res)), true);
+      }
     }
-  }
 
-  async function doSendDirect() {
-    if (_sending) return;
-    const msg = document.getElementById('msg-input').value.trim();
-    const ch = document.getElementById('channel').value;
-    const ip = document.getElementById('target-ip').value;
-    const port = parseInt(document.getElementById('target-port').value);
-    if (!msg) return;
-    _sending = true;
-    btnBusy('btn-broadcast', true);
-    btnBusy('btn-senddirect', true);
-    setStatus('send-status', 'Sending to ' + ip + ':' + port + '...', false);
-    const res = await apiCall('POST', '/send-peer', {ip:ip, port:port, message:msg, channel:ch});
-    _sending = false;
-    btnBusy('btn-broadcast', false);
-    btnBusy('btn-senddirect', false);
-    log('SEND-PEER: ' + JSON.stringify(res));
-    if (res.status === 'sent') {
-      document.getElementById('msg-input').value = '';
-      setStatus('send-status', 'Sent directly to ' + res.target, false);
-      doGetMessages();
-    } else {
-      setStatus('send-status', 'Failed to ' + res.target + ': ' + (res.error || res.status), true);
+    async function doPeerStatus() {
+      btnBusy('btn-status', true);
+      const res = await apiCall('GET', '/peer-status');
+      btnBusy('btn-status', false);
+      log('PEER-STATUS: ' + JSON.stringify(res));
+      const el = document.getElementById('p2p-info');
+      if (res.status === 'active') {
+        const peers = res.connected_peers || [];
+        el.innerHTML = 'Me: <b>' + res.username + '</b> @ ' + res.listen_address +
+          ' | Connected peers (' + res.peer_count + '): ' +
+          (peers.length ? peers.map(function (p) { return p.username + '@' + p.ip + ':' + p.port; }).join(', ') : 'none');
+      } else {
+        el.innerHTML = 'Peer not initialized — click Register first.';
+      }
     }
-  }
 
-  async function doGetChannels() {
-    const res = await apiCall('GET', '/channels');
-    log('CHANNELS: ' + JSON.stringify(res));
-    if (res.channels) {
-      setStatus('notif-badge', '', false);
-      alert('Channels: ' + res.channels.join(', '));
+    async function doBroadcast() {
+      if (_sending) return;
+      const msg = document.getElementById('msg-input').value.trim();
+      const ch = document.getElementById('channel').value;
+      if (!msg) return;
+      _sending = true;
+      btnBusy('btn-broadcast', true);
+      btnBusy('btn-senddirect', true);
+      setStatus('send-status', 'Sending...', false);
+      const res = await apiCall('POST', '/broadcast-peer', { message: msg, channel: ch });
+      _sending = false;
+      btnBusy('btn-broadcast', false);
+      btnBusy('btn-senddirect', false);
+      log('BROADCAST: ' + JSON.stringify(res));
+      if (res.status === 'broadcast_sent') {
+        document.getElementById('msg-input').value = '';
+        setStatus('send-status', 'Broadcast sent to ' + res.peers_reached + ' peer(s)', false);
+        doGetMessages();
+      } else {
+        setStatus('send-status', 'Error: ' + (res.error || JSON.stringify(res)), true);
+      }
     }
-  }
 
-  async function doGetMessages() {
-    const ch = document.getElementById('channel').value;
-    const res = await apiCall('GET', '/messages', {channel: ch, limit: 50});
-    const el = document.getElementById('messages');
-    el.innerHTML = '';
-    if (res.messages) {
-      res.messages.forEach(function(m) {
-        el.innerHTML += '<div class="msg"><span class="sender">' + (m.sender||'?') +
-          '</span> <span class="time">' + (m.timestamp||'') + '</span><br>' +
-          '<span class="text">' + escHtml(m.message||'') + '</span></div>';
-      });
+    async function doSendDirect() {
+      if (_sending) return;
+      const msg = document.getElementById('msg-input').value.trim();
+      const ch = document.getElementById('channel').value;
+      const ip = document.getElementById('target-ip').value;
+      const port = parseInt(document.getElementById('target-port').value);
+      if (!msg) return;
+      _sending = true;
+      btnBusy('btn-broadcast', true);
+      btnBusy('btn-senddirect', true);
+      setStatus('send-status', 'Sending to ' + ip + ':' + port + '...', false);
+      const res = await apiCall('POST', '/send-peer', { ip: ip, port: port, message: msg, channel: ch });
+      _sending = false;
+      btnBusy('btn-broadcast', false);
+      btnBusy('btn-senddirect', false);
+      log('SEND-PEER: ' + JSON.stringify(res));
+      if (res.status === 'sent') {
+        document.getElementById('msg-input').value = '';
+        setStatus('send-status', 'Sent directly to ' + res.target, false);
+        doGetMessages();
+      } else {
+        setStatus('send-status', 'Failed to ' + res.target + ': ' + (res.error || res.status), true);
+      }
     }
-    el.scrollTop = el.scrollHeight;
-  }
 
-  function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  async function doGetNotifications() {
-    const res = await apiCall('GET', '/notifications');
-    log('NOTIFICATIONS: ' + JSON.stringify(res));
-    const badge = document.getElementById('notif-badge');
-    if (res.notifications && res.notifications.length > 0) {
-      badge.textContent = res.notifications.length + ' new';
-      badge.style.display = 'inline';
-      res.notifications.forEach(function(n) {
-        const el = document.getElementById('messages');
-        el.innerHTML += '<div class="notif">[NOTIF] ' + escHtml(n.from) + ' in #' +
-          escHtml(n.channel) + ': ' + escHtml(n.preview) + '</div>';
-      });
-    } else {
-      badge.style.display = 'none';
-      alert('No new notifications.');
+    async function doGetChannels() {
+      const res = await apiCall('GET', '/channels');
+      log('CHANNELS: ' + JSON.stringify(res));
+      if (res.channels) {
+        setStatus('notif-badge', '', false);
+        alert('Channels: ' + res.channels.join(', '));
+      }
     }
-  }
 
-  // Auto-refresh messages every 3 seconds
-  setInterval(function() {
-    if (sessionId) doGetMessages();
-  }, 3000);
-</script>
+    async function doGetMessages() {
+      const ch = document.getElementById('channel').value;
+      const res = await apiCall('GET', '/messages', { channel: ch, limit: 50 });
+      const el = document.getElementById('messages');
+
+      // Check if we are currently scrolled to the bottom (allow 10px margin of error)
+      const isAtBottom = el.scrollHeight - el.clientHeight <= el.scrollTop + 10;
+
+      el.innerHTML = '';
+      if (res.messages) {
+        res.messages.forEach(function (m) {
+          const isOwn = m.sender === currentUser;
+          const alignClass = isOwn ? 'own' : 'other';
+
+          el.innerHTML += '<div class="msg-wrapper ' + alignClass + '">' +
+            '<div class="msg-bubble">' +
+            '<div class="msg-sender">' + escHtml(m.sender || '?') + '</div>' +
+            '<div class="msg-text">' + escHtml(m.message || '') + '</div>' +
+            '<div class="msg-time">' + (m.timestamp || '') + '</div>' +
+            '</div></div>';
+        });
+      }
+
+      // Auto-scroll to bottom only if user was already at the bottom
+      // This prevents jumping when reading old messages
+      if (isAtBottom) {
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    async function doGetNotifications() {
+      const res = await apiCall('GET', '/notifications');
+      log('NOTIFICATIONS: ' + JSON.stringify(res));
+      const badge = document.getElementById('notif-badge');
+      if (res.notifications && res.notifications.length > 0) {
+        badge.textContent = res.notifications.length + ' new';
+        badge.style.display = 'inline';
+        res.notifications.forEach(function (n) {
+          const el = document.getElementById('messages');
+          el.innerHTML += '<div class="notif">[NOTIF] ' + escHtml(n.from) + ' in #' +
+            escHtml(n.channel) + ': ' + escHtml(n.preview) + '</div>';
+        });
+      } else {
+        badge.style.display = 'none';
+        alert('No new notifications.');
+      }
+    }
+
+    // Auto-refresh messages every 3 seconds
+    setInterval(function () {
+      if (sessionId) doGetMessages();
+    }, 3000);
+  </script>
 </body>
+
 </html>
