@@ -393,8 +393,11 @@
       if (res.session_id) {
         sessionId = res.session_id;
         currentUser = u;
-        document.getElementById('auth-status').textContent = 'Logged in as ' + u;
-        document.getElementById('auth-status').className = 'status';
+        localStorage.setItem('session_id', res.session_id);
+        localStorage.setItem('current_user', u);
+        document.getElementById('auth-panel').style.display  = 'none';
+        document.getElementById('session-bar').style.display = 'flex';
+        document.getElementById('session-user').textContent  = u;
       } else {
         setStatus('auth-status', 'Login failed: ' + (res.error || ''), true);
       }
