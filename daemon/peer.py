@@ -46,7 +46,8 @@ class PeerNode:
         self._running = False
         self._server_socket = None
         self._listener_thread = None
-        self.on_message = None  # callback(message_dict)
+        self.on_message = None          # callback(message_dict)
+        self.on_channel_created = None  # callback(channel_name)
 
     def start(self):
         """Start the peer listener in a background thread."""
@@ -180,6 +181,15 @@ class PeerNode:
                 conn.sendall(ack.encode("utf-8"))
             except Exception:
                 pass
+
+        elif msg_type == "channel_created":
+            channel = msg.get("channel", "")
+            if channel:
+                with self._lock:
+                    if channel not in self.channels:
+                        self.channels[channel] = []
+                if self.on_channel_created:
+                    self.on_channel_created(channel)
 
         elif msg_type == "chat":
             # Skip own messages echoed back via P2P
@@ -386,6 +396,25 @@ class PeerNode:
                 self.connected_peers.pop((peer_ip, peer_port), None)
             return False
 
+    def broadcast_channel_created(self, channel_name, sender=None):
+        """Notify all connected peers that a new channel was created.
+
+        :param channel_name (str): Name of the new channel.
+        :param sender (str): Username of the creator.
+        """
+        msg = {
+            "type": "channel_created",
+            "channel": channel_name,
+            "sender": sender or self.username,
+            "sender_ip": self.ip,
+            "sender_port": self.port,
+            "timestamp": get_timestamp(),
+        }
+        with self._lock:
+            peers = list(self.connected_peers.keys())
+        for (pip, pport) in peers:
+            self._send_to_peer(pip, pport, msg)
+
     def get_channels(self):
         """Get list of channel names.
 
@@ -393,6 +422,27 @@ class PeerNode:
         """
         with self._lock:
             return list(self.channels.keys())
+
+    def create_channel(self, channel_name):
+        """Create a new channel if it doesn't exist.
+
+        :param channel_name (str): Name of the channel.
+        :rtype: bool - True if created, False if already exists.
+        """
+        with self._lock:
+            if channel_name in self.channels:
+                return False
+            self.channels[channel_name] = []
+            return True
+
+    def join_channel(self, channel_name):
+        """Join an existing channel (create if not exists).
+
+        :param channel_name (str): Name of the channel.
+        """
+        with self._lock:
+            if channel_name not in self.channels:
+                self.channels[channel_name] = []
 
     def get_messages(self, channel="general", limit=50):
         """Get messages from a channel.

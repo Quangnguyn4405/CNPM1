@@ -74,6 +74,10 @@ peer_lock = threading.Lock()
 session_peers = {}
 session_peers_lock = threading.Lock()
 
+# Central channel registry for this node
+channel_registry = {"general"}
+channel_registry_lock = threading.Lock()
+
 
 def _parse_body(body_str):
     """Parse JSON body from request body string.
@@ -202,6 +206,12 @@ def _error(msg, code=400):
     :rtype: bytes
     """
     return json.dumps({"error": msg, "status": code}).encode("utf-8")
+
+
+def _on_channel_created(channel_name):
+    """Callback: a peer notified us of a new channel — add to local registry."""
+    with channel_registry_lock:
+        channel_registry.add(channel_name)
 
 
 # ============================================================
@@ -365,6 +375,7 @@ def submit_info(headers="", body=""):
         if existing is not None:
             existing.stop()
         new_peer = PeerNode(peer_ip, peer_port, peer_username)
+        new_peer.on_channel_created = _on_channel_created
         new_peer.start()
         _set_peer(hdr, new_peer)
 
@@ -515,16 +526,74 @@ def send_peer(headers="", body=""):
 
 @app.route('/channels', methods=['GET'])
 def channels(headers="", body=""):
-    """List all channels the user has joined.
+    """List all known channels from the local registry.
 
     Response: JSON list of channel names.
     """
-    _, hdr = _auth_check(headers)
+    with channel_registry_lock:
+        ch_list = sorted(channel_registry)
+    return _json_response({"channels": ch_list})
+
+
+@app.route('/create-channel', methods=['POST'])
+def create_channel(headers="", body=""):
+    """Create a new channel and broadcast it to connected peers.
+
+    Request body: {"channel": "channel_name"}
+    Response: JSON confirmation.
+    """
+    username, hdr = _auth_check(headers)
+    if not username:
+        return _error("Authentication required", 401)
     peer = _get_peer(hdr)
     if peer is None:
-        return _json_response({"channels": ["general"]})
-    ch_list = peer.get_channels()
-    return _json_response({"channels": ch_list})
+        return _error("Peer not initialized. Call /submit-info first.")
+
+    body_data = _parse_body(body)
+    channel_name = body_data.get("channel", "").strip()
+    if not channel_name:
+        return _error("Missing 'channel' name")
+
+    with channel_registry_lock:
+        already_exists = channel_name in channel_registry
+        channel_registry.add(channel_name)
+
+    peer.create_channel(channel_name)
+
+    # Broadcast a system message so connected peers learn about the new channel
+    if not already_exists:
+        peer.broadcast_channel_created(channel_name, username)
+
+    if already_exists:
+        return _json_response({"status": "exists", "channel": channel_name,
+                                "message": "Channel already exists"})
+    return _json_response({"status": "created", "channel": channel_name})
+
+
+@app.route('/join-channel', methods=['POST'])
+def join_channel(headers="", body=""):
+    """Join a channel (creates locally if not exists).
+
+    Request body: {"channel": "channel_name"}
+    Response: JSON confirmation.
+    """
+    username, hdr = _auth_check(headers)
+    if not username:
+        return _error("Authentication required", 401)
+    peer = _get_peer(hdr)
+    if peer is None:
+        return _error("Peer not initialized. Call /submit-info first.")
+
+    body_data = _parse_body(body)
+    channel_name = body_data.get("channel", "").strip()
+    if not channel_name:
+        return _error("Missing 'channel' name")
+
+    with channel_registry_lock:
+        channel_registry.add(channel_name)
+    peer.join_channel(channel_name)
+    return _json_response({"status": "joined", "channel": channel_name,
+                           "all_channels": sorted(channel_registry)})
 
 
 @app.route('/messages', methods=['GET'])
