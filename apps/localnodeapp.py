@@ -224,6 +224,19 @@ app = AsynapRous()
 # Authentication endpoints
 # ============================================================
 
+@app.route('/login', methods=['GET'])
+def login_page(headers="", body=""):
+    """Serve the login HTML page."""
+    import os
+    html_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "www", "login.html")
+    try:
+        with open(html_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        return (html, {"Content-Type": "text/html"}, 200)
+    except Exception:
+        return ("<h1>Login page not found</h1>", {"Content-Type": "text/html"}, 404)
+
+
 @app.route('/login', methods=['POST'])
 def login(headers="", body=""):
     """Authenticate user via HTTP Basic Auth, return session cookie.
