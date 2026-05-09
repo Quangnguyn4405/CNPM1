@@ -458,7 +458,7 @@
     async function doSubmitInfo() {
       const ip = document.getElementById('peer-ip').value;
       const port = parseInt(document.getElementById('peer-port').value);
-      const u = document.getElementById('username').value;
+      const u = currentUser || document.getElementById('username').value;
       btnBusy('btn-register', true);
       setStatus('register-status', 'Registering...', false);
       const res = await apiCall('POST', '/submit-info', { username: u, ip: ip, port: port });
