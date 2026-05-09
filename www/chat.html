@@ -178,6 +178,50 @@
       margin: 2px 0;
       border-left: 3px solid #53d8fb;
     }
+
+    #channel-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 6px 0;
+    }
+
+    .channel-tag {
+      background: #0f3460;
+      color: #e0e0e0;
+      padding: 4px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 12px;
+      border: 1px solid #1a4a80;
+      transition: background 0.15s;
+    }
+
+    .channel-tag:hover {
+      background: #53d8fb;
+      color: #000;
+    }
+
+    .channel-tag.active {
+      background: #53d8fb;
+      color: #000;
+      font-weight: bold;
+    }
+    #session-bar {
+      background: #0f3460;
+      padding: 6px 12px;
+      margin: 6px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+    #session-bar span { color: #53d8fb; }
+    #session-bar button {
+      padding: 3px 10px;
+      font-size: 11px;
+      margin: 0;
+    }
   </style>
 </head>
 
@@ -185,8 +229,14 @@
   <div class="container">
     <h1>HybridChat - Non-blocking P2P Chat</h1>
 
+    <!-- Session bar (shown when already logged in) -->
+    <div id="session-bar" style="display:none;">
+      Logged in as <span id="session-user"></span>
+      <button onclick="doLogout()">Logout</button>
+    </div>
+
     <!-- Login Panel -->
-    <div class="panel">
+    <div class="panel" id="auth-panel">
       <h3>1. Authentication</h3>
       <div class="row">
         <label>Username:</label>
@@ -245,12 +295,18 @@
       <h3>4. Chat</h3>
       <div class="row">
         <label>Channel:</label>
-        <input type="text" id="channel" value="general">
-        <button onclick="doGetChannels()">List Channels</button>
-        <button onclick="doGetMessages()">Refresh</button>
-        <button onclick="doGetNotifications()">Notifications</button>
-        <span id="notif-badge" style="color:#f44336; font-weight:bold; display:none;"></span>
+        <input type="text" id="channel" value="general" readonly style="cursor:default; width:140px;">
+        <button onclick="doListChannels()">List Channels</button>
+        <button id="btn-refresh" onclick="doGetMessages()">Refresh</button>
+        <span id="refresh-status" class="status" style="font-size:11px;"></span>
       </div>
+      <div class="row">
+        <label style="width:80px; color:#aaa; font-size:11px;">New channel:</label>
+        <input type="text" id="new-channel" placeholder="channel name" style="width:160px;">
+        <button onclick="doCreateChannel()">Add Channel</button>
+        <span id="channel-status" class="status" style="font-size:11px;"></span>
+      </div>
+      <div id="channel-list"></div>
       <div id="messages"></div>
       <div class="row" style="margin-top:6px;">
         <input type="text" id="msg-input" style="flex:1;width:auto;" placeholder="Type message..."
@@ -272,6 +328,19 @@
     let sessionId = '';
     let _sending = false;
     let currentUser = '';
+
+    // Restore session from login redirect
+    (function() {
+      var sid = localStorage.getItem('session_id');
+      var su  = localStorage.getItem('current_user');
+      if (sid && su) {
+        sessionId   = sid;
+        currentUser = su;
+        document.getElementById('auth-panel').style.display  = 'none';
+        document.getElementById('session-bar').style.display = 'flex';
+        document.getElementById('session-user').textContent  = su;
+      }
+    })();
 
     function log(msg, isError) {
       const el = document.getElementById('log');
@@ -332,10 +401,12 @@
     }
 
     async function doLogout() {
-      const res = await apiCall('POST', '/logout');
-      log('LOGOUT: ' + JSON.stringify(res));
-      sessionId = '';
-      setStatus('auth-status', 'Logged out', false);
+      await apiCall('POST', '/logout');
+      sessionId   = '';
+      currentUser = '';
+      localStorage.removeItem('session_id');
+      localStorage.removeItem('current_user');
+      window.location.href = '/login';
     }
 
     async function doRegister() {
@@ -493,40 +564,84 @@
       }
     }
 
-    async function doGetChannels() {
+    async function doListChannels() {
       const res = await apiCall('GET', '/channels');
       log('CHANNELS: ' + JSON.stringify(res));
       if (res.channels) {
-        setStatus('notif-badge', '', false);
-        alert('Channels: ' + res.channels.join(', '));
+        renderChannelList(res.channels);
       }
     }
 
-    async function doGetMessages() {
+    function renderChannelList(channels) {
+      const el = document.getElementById('channel-list');
+      const current = document.getElementById('channel').value;
+      el.innerHTML = channels.map(function(ch) {
+        const active = ch === current ? ' active' : '';
+        return '<span class="channel-tag' + active + '" onclick="switchChannel(\'' + escHtml(ch) + '\')">#' + escHtml(ch) + '</span>';
+      }).join('');
+    }
+
+    function switchChannel(ch) {
+      document.getElementById('channel').value = ch;
+      const tags = document.querySelectorAll('.channel-tag');
+      tags.forEach(function(t) {
+        t.classList.toggle('active', t.textContent === '#' + ch);
+      });
+      doGetMessages();
+    }
+
+    async function doCreateChannel() {
+      const name = document.getElementById('new-channel').value.trim();
+      if (!name) { setStatus('channel-status', 'Enter a channel name', true); return; }
+      const res = await apiCall('POST', '/create-channel', { channel: name });
+      log('CREATE-CHANNEL: ' + JSON.stringify(res));
+      if (res.status === 'created' || res.status === 'exists') {
+        setStatus('channel-status', res.status === 'created' ? 'Channel created' : 'Already exists', res.status === 'exists');
+        document.getElementById('new-channel').value = '';
+        switchChannel(name);
+        doListChannels();
+      } else {
+        setStatus('channel-status', res.error || 'Error', true);
+      }
+    }
+
+    async function doGetMessages(silent) {
       const ch = document.getElementById('channel').value;
+      if (!silent) {
+        btnBusy('btn-refresh', true);
+        setStatus('refresh-status', 'Loading...', false);
+      }
       const res = await apiCall('GET', '/messages', { channel: ch, limit: 50 });
+      if (!silent) {
+        btnBusy('btn-refresh', false);
+      }
       const el = document.getElementById('messages');
 
-      // Check if we are currently scrolled to the bottom (allow 10px margin of error)
+      if (res.error) {
+        if (!silent) setStatus('refresh-status', 'Error: ' + res.error, true);
+        return;
+      }
+
       const isAtBottom = el.scrollHeight - el.clientHeight <= el.scrollTop + 10;
 
       el.innerHTML = '';
-      if (res.messages) {
-        res.messages.forEach(function (m) {
-          const isOwn = m.sender === currentUser;
-          const alignClass = isOwn ? 'own' : 'other';
+      const msgs = res.messages || [];
+      msgs.forEach(function (m) {
+        const isOwn = m.sender === currentUser;
+        const alignClass = isOwn ? 'own' : 'other';
+        el.innerHTML += '<div class="msg-wrapper ' + alignClass + '">' +
+          '<div class="msg-bubble">' +
+          '<div class="msg-sender">' + escHtml(m.sender || '?') + '</div>' +
+          '<div class="msg-text">' + escHtml(m.message || '') + '</div>' +
+          '<div class="msg-time">' + (m.timestamp || '') + '</div>' +
+          '</div></div>';
+      });
 
-          el.innerHTML += '<div class="msg-wrapper ' + alignClass + '">' +
-            '<div class="msg-bubble">' +
-            '<div class="msg-sender">' + escHtml(m.sender || '?') + '</div>' +
-            '<div class="msg-text">' + escHtml(m.message || '') + '</div>' +
-            '<div class="msg-time">' + (m.timestamp || '') + '</div>' +
-            '</div></div>';
-        });
+      if (!silent) {
+        setStatus('refresh-status', '#' + ch + ' — ' + msgs.length + ' msg(s)', false);
+        log('MESSAGES [#' + ch + ']: ' + msgs.length + ' message(s)');
       }
 
-      // Auto-scroll to bottom only if user was already at the bottom
-      // This prevents jumping when reading old messages
       if (isAtBottom) {
         el.scrollTop = el.scrollHeight;
       }
@@ -536,27 +651,9 @@
       return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    async function doGetNotifications() {
-      const res = await apiCall('GET', '/notifications');
-      log('NOTIFICATIONS: ' + JSON.stringify(res));
-      const badge = document.getElementById('notif-badge');
-      if (res.notifications && res.notifications.length > 0) {
-        badge.textContent = res.notifications.length + ' new';
-        badge.style.display = 'inline';
-        res.notifications.forEach(function (n) {
-          const el = document.getElementById('messages');
-          el.innerHTML += '<div class="notif">[NOTIF] ' + escHtml(n.from) + ' in #' +
-            escHtml(n.channel) + ': ' + escHtml(n.preview) + '</div>';
-        });
-      } else {
-        badge.style.display = 'none';
-        alert('No new notifications.');
-      }
-    }
-
-    // Auto-refresh messages every 3 seconds
+    // Auto-refresh messages every 3 seconds (silent — no log spam)
     setInterval(function () {
-      if (sessionId) doGetMessages();
+      if (sessionId) doGetMessages(true);
     }, 3000);
   </script>
 </body>

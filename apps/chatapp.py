@@ -65,19 +65,44 @@ peer_lock = threading.Lock()
 session_peers = {}
 session_peers_lock = threading.Lock()
 
+# Central channel registry — authoritative list shared across all peers
+channel_registry = {"general"}
+channel_registry_lock = threading.Lock()
+
 
 def _parse_body(body_str):
-    """Parse JSON body from request body string.
+    """Parse request body from JSON or URL-encoded form data.
+
+    Supports both application/json and application/x-www-form-urlencoded
+    (browser form submission).
 
     :param body_str (str): Raw body text.
     :rtype: dict
     """
     if not body_str or not body_str.strip():
         return {}
+    body_str = body_str.strip()
+
+    # Try JSON first
     try:
-        return json.loads(body_str.strip())
-    except json.JSONDecodeError:
-        return {}
+        return json.loads(body_str)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Fallback: URL-encoded form data (key=val&key2=val2)
+    if '=' in body_str:
+        try:
+            from urllib.parse import unquote_plus
+            result = {}
+            for pair in body_str.split('&'):
+                if '=' in pair:
+                    k, v = pair.split('=', 1)
+                    result[unquote_plus(k)] = unquote_plus(v)
+            return result
+        except Exception:
+            pass
+
+    return {}
 
 
 def _parse_headers_dict(headers_str):
@@ -204,6 +229,19 @@ app = AsynapRous()
 # ============================================================
 # Authentication endpoints
 # ============================================================
+
+@app.route('/login', methods=['GET'])
+def login_page(headers="", body=""):
+    """Serve the login HTML page."""
+    import os
+    html_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "www", "login.html")
+    try:
+        with open(html_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        return (html, {"Content-Type": "text/html"}, 200)
+    except Exception:
+        return ("<h1>Login page not found</h1>", {"Content-Type": "text/html"}, 404)
+
 
 @app.route('/login', methods=['POST'])
 def login(headers="", body=""):
@@ -536,16 +574,77 @@ def send_peer(headers="", body=""):
 
 @app.route('/channels', methods=['GET'])
 def channels(headers="", body=""):
-    """List all channels the user has joined.
+    """List all channels from the central registry.
 
     Response: JSON list of channel names.
     """
-    _, hdr = _auth_check(headers)
+    _ = headers
+    with channel_registry_lock:
+        ch_list = sorted(channel_registry)
+    return _json_response({"channels": ch_list})
+
+
+@app.route('/create-channel', methods=['POST'])
+def create_channel(headers="", body=""):
+    """Create a new channel.
+
+    Request body: {"channel": "channel_name"}
+    Response: JSON confirmation.
+    """
+    username, hdr = _auth_check(headers)
+    if not username:
+        return _error("Authentication required", 401)
     peer = _get_peer(hdr)
     if peer is None:
-        return _json_response({"channels": ["general"]})
-    ch_list = peer.get_channels()
-    return _json_response({"channels": ch_list})
+        return _error("Peer not initialized. Call /submit-info first.")
+
+    body_data = _parse_body(body)
+    channel_name = body_data.get("channel", "")
+    if not channel_name:
+        return _error("Missing 'channel' name")
+
+    with channel_registry_lock:
+        already_in_registry = channel_name in channel_registry
+        channel_registry.add(channel_name)
+
+    peer.create_channel(channel_name)
+    if already_in_registry:
+        return _json_response({
+            "status": "exists",
+            "channel": channel_name,
+            "message": "Channel already exists",
+        })
+    return _json_response({
+        "status": "created",
+        "channel": channel_name,
+    })
+
+
+@app.route('/join-channel', methods=['POST'])
+def join_channel(headers="", body=""):
+    """Join a channel (creates it if it doesn't exist).
+
+    Request body: {"channel": "channel_name"}
+    Response: JSON confirmation.
+    """
+    username, hdr = _auth_check(headers)
+    if not username:
+        return _error("Authentication required", 401)
+    peer = _get_peer(hdr)
+    if peer is None:
+        return _error("Peer not initialized. Call /submit-info first.")
+
+    body_data = _parse_body(body)
+    channel_name = body_data.get("channel", "")
+    if not channel_name:
+        return _error("Missing 'channel' name")
+
+    peer.join_channel(channel_name)
+    return _json_response({
+        "status": "joined",
+        "channel": channel_name,
+        "all_channels": peer.get_channels(),
+    })
 
 
 @app.route('/messages', methods=['GET'])
