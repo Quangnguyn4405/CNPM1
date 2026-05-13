@@ -337,6 +337,12 @@
         <button onclick="doCreateChannel()">Add Channel</button>
         <span id="channel-status" class="status" style="font-size:11px;"></span>
       </div>
+      <div class="row">
+        <label style="width:80px; color:#aaa; font-size:11px;">Del channel:</label>
+        <input type="text" id="del-channel-input" placeholder="select a channel" style="width:150px;" readonly>
+        <button onclick="doDeleteCurrentChannel()">Delete Channel</button>
+        <span id="delete-status" class="status" style="font-size:11px;"></span>
+      </div>
       <div class="row" id="member-row" style="display:none; align-items:flex-start;">
         <label style="width:80px; color:#aaa; font-size:11px; padding-top:4px;">Invite:</label>
         <div id="member-picker"><span style="color:#555; font-size:11px;">Loading users...</span></div>
@@ -602,9 +608,28 @@
       }
     }
 
-    async function doListChannels() {
+    async function doDeleteCurrentChannel() {
+      const ch = document.getElementById('del-channel-input').value.trim();
+      if (!ch) { setStatus('delete-status', 'Select a channel first', true); return; }
+      if (ch === 'general') { setStatus('delete-status', 'Cannot delete general', true); return; }
+      if (!confirm('Delete channel #' + ch + '? This cannot be undone.')) return;
+      const res = await apiCall('POST', '/delete-channel', { channel: ch });
+      log('DELETE-CHANNEL: ' + JSON.stringify(res));
+      if (res.status === 'deleted') {
+        setStatus('delete-status', 'Deleted #' + ch, false);
+        document.getElementById('del-channel-input').value = '';
+        if (document.getElementById('channel').value === ch) {
+          switchChannel('general');
+        }
+        doListChannels();
+      } else {
+        setStatus('delete-status', res.error || 'Delete failed', true);
+      }
+    }
+
+    async function doListChannels(silent) {
       const res = await apiCall('GET', '/channels');
-      log('CHANNELS: ' + JSON.stringify(res));
+      if (!silent) log('CHANNELS: ' + JSON.stringify(res));
       if (res.channels) {
         renderChannelList(res.channels);
       }
@@ -614,16 +639,18 @@
       const el = document.getElementById('channel-list');
       const current = document.getElementById('channel').value;
       el.innerHTML = channels.map(function(ch) {
-        const active = ch === current ? ' active' : '';
-        return '<span class="channel-tag' + active + '" onclick="switchChannel(\'' + escHtml(ch) + '\')">#' + escHtml(ch) + '</span>';
+        const name = typeof ch === 'object' ? ch.name : ch;
+        const active = name === current ? ' active' : '';
+        return '<span class="channel-tag' + active + '" data-channel="' + escHtml(name) + '" onclick="switchChannel(\'' + escHtml(name) + '\')">#' + escHtml(name) + '</span>';
       }).join('');
     }
 
     function switchChannel(ch) {
       document.getElementById('channel').value = ch;
+      document.getElementById('del-channel-input').value = ch !== 'general' ? ch : '';
       const tags = document.querySelectorAll('.channel-tag');
       tags.forEach(function(t) {
-        t.classList.toggle('active', t.textContent === '#' + ch);
+        t.classList.toggle('active', t.dataset.channel === ch);
       });
       doGetMessages();
     }
@@ -720,9 +747,17 @@
       return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    // Auto-refresh messages every 3 seconds (silent — no log spam)
+    // Load channels on page load if already logged in
+    if (sessionId) {
+      doListChannels(true);
+    }
+
+    // Auto-refresh messages and channels every 3 seconds (silent)
     setInterval(function () {
-      if (sessionId) doGetMessages(true);
+      if (sessionId) {
+        doGetMessages(true);
+        doListChannels(true);
+      }
     }, 3000);
   </script>
 </body>

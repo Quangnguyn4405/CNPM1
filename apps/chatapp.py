@@ -394,6 +394,22 @@ def submit_info(headers="", body=""):
         if existing is not None:
             existing.stop()
         new_peer = PeerNode(peer_ip, peer_port, peer_username)
+
+        def _on_channel_created(channel_name, members, creator="remote"):
+            with channel_registry_lock:
+                if channel_name not in channel_registry:
+                    channel_registry[channel_name] = {
+                        "members": set(members) if members is not None else None,
+                        "creator": creator,
+                    }
+
+        new_peer.on_channel_created = _on_channel_created
+
+        def _on_channel_deleted(channel_name):
+            with channel_registry_lock:
+                channel_registry.pop(channel_name, None)
+
+        new_peer.on_channel_deleted = _on_channel_deleted
         new_peer.start()
         _set_peer(hdr, new_peer)
 
@@ -584,10 +600,12 @@ def channels(headers="", body=""):
     username, _ = _auth_check(headers)
     with channel_registry_lock:
         ch_list = sorted(
-            name for name, info in channel_registry.items()
+            (name, info["creator"])
+            for name, info in channel_registry.items()
             if info["members"] is None or (username and username in info["members"])
         )
-    return _json_response({"channels": ch_list})
+    channels = [{"name": name, "creator": creator} for name, creator in ch_list]
+    return _json_response({"channels": channels})
 
 
 @app.route('/create-channel', methods=['POST'])
@@ -630,6 +648,42 @@ def create_channel(headers="", body=""):
         return _json_response({"status": "exists", "channel": channel_name,
                                 "message": "Channel already exists"})
     return _json_response({"status": "created", "channel": channel_name})
+
+
+@app.route('/delete-channel', methods=['POST'])
+def delete_channel(headers="", body=""):
+    """Delete a channel. Only the creator can delete it. 'general' cannot be deleted.
+
+    Request body: {"channel": "name"}
+    Response: JSON confirmation.
+    """
+    username, hdr = _auth_check(headers)
+    if not username:
+        return _error("Authentication required", 401)
+    peer = _get_peer(hdr)
+    if peer is None:
+        return _error("Peer not initialized. Call /submit-info first.")
+
+    body_data = _parse_body(body)
+    channel_name = body_data.get("channel", "").strip()
+    if not channel_name:
+        return _error("Missing 'channel' name")
+
+    if channel_name == "general":
+        return _error("Cannot delete the 'general' channel", 403)
+
+    with channel_registry_lock:
+        info = channel_registry.get(channel_name)
+        if info is None:
+            return _error("Channel not found", 404)
+        if info["creator"] != username:
+            return _error("Only the channel creator can delete it", 403)
+        del channel_registry[channel_name]
+
+    peer.delete_channel(channel_name)
+    peer.broadcast_channel_deleted(channel_name, username)
+
+    return _json_response({"status": "deleted", "channel": channel_name})
 
 
 @app.route('/join-channel', methods=['POST'])

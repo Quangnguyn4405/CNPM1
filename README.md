@@ -37,6 +37,8 @@ Khi thấy dòng `async_server **ASYNC** listening on 0.0.0.0:8000` là server s
 
 ### Truy cập
 
+`http://127.0.0.1:8000/login.html`.
+
 Mở trình duyệt, vào `http://127.0.0.1:8000/chat.html`.
 
 > Nên dùng **tab ẩn danh (Incognito)** để tránh xung đột session/cache. Mỗi người dùng mở một tab ẩn danh riêng.

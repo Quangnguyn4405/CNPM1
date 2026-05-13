@@ -160,9 +160,11 @@ class HttpAdapter:
             # If there is a route hook, invoke it
             if req.hook:
                 hook_body, hook_hdrs, hook_status, hook_reason = self._invoke_hook(req.hook, req)
-                ct = "application/json" if hook_body and hook_body[:1] in (b"{", b"[") else "application/octet-stream"
+                ct = hook_hdrs.get("Content-Type",
+                    "application/json" if hook_body and hook_body[:1] in (b"{", b"[") else "application/octet-stream"
+                )
                 all_extra = dict(resp.extra_headers)
-                all_extra.update(hook_hdrs)
+                all_extra.update({k: v for k, v in hook_hdrs.items() if k != "Content-Type"})
                 response_bytes = resp.build_response_header(
                     status_code=hook_status, reason=hook_reason,
                     content_type=ct,

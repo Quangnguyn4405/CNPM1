@@ -42,3 +42,7 @@ Bây giờ, hãy quay lại **Terminal 1** (cửa sổ đang chạy `start_track
 
 Tiếp tục mở giao diện web của Client A và Client B, gửi tin nhắn cho nhau (`Broadcast` hoặc `Send`).
 => **Kết quả:** Tin nhắn vẫn nhảy liên tục! Vì trình duyệt web của bạn vẫn đang tương tác với Server cá nhân (`localnode.py`), và Server cá nhân này đang giữ Socket TCP kết nối trực tiếp với Server cá nhân của người kia. Tracker Server đã hoàn thành nhiệm vụ của nó (làm mai mối) và việc nó chết không còn ảnh hưởng đến mạng P2P nữa.
+
+curl.exe -v -X POST http://127.0.0.1:8000/login -H "Content-Type: application/json" -d '{\"username\":\"user1\",\"password\":\"password1\"}'
+
+curl.exe -v -X POST http://127.0.0.1:8000/login -H "Content-Type: application/json" -d '{\"username\":\"admin\",\"password\":\"wrong\"}'

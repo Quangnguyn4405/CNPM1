@@ -47,7 +47,8 @@ class PeerNode:
         self._server_socket = None
         self._listener_thread = None
         self.on_message = None          # callback(message_dict)
-        self.on_channel_created = None  # callback(channel_name)
+        self.on_channel_created = None  # callback(channel_name, members)
+        self.on_channel_deleted = None  # callback(channel_name)
 
     def start(self):
         """Start the peer listener in a background thread."""
@@ -182,9 +183,18 @@ class PeerNode:
             except Exception:
                 pass
 
+        elif msg_type == "channel_deleted":
+            channel = msg.get("channel", "")
+            if channel:
+                with self._lock:
+                    self.channels.pop(channel, None)
+                if self.on_channel_deleted:
+                    self.on_channel_deleted(channel)
+
         elif msg_type == "channel_created":
             channel = msg.get("channel", "")
             members = msg.get("members")  # None = public, list = private
+            sender = msg.get("sender", "unknown")
             if channel:
                 # Only join if public or this peer is an invited member
                 if members is None or self.username in members:
@@ -192,7 +202,7 @@ class PeerNode:
                         if channel not in self.channels:
                             self.channels[channel] = []
                     if self.on_channel_created:
-                        self.on_channel_created(channel, members)
+                        self.on_channel_created(channel, members, sender)
 
         elif msg_type == "chat":
             # Skip own messages echoed back via P2P
@@ -419,6 +429,37 @@ class PeerNode:
             peers = list(self.connected_peers.keys())
         for (pip, pport) in peers:
             self._send_to_peer(pip, pport, msg)
+
+    def broadcast_channel_deleted(self, channel_name, sender=None):
+        """Notify all connected peers that a channel was deleted.
+
+        :param channel_name (str): Name of the deleted channel.
+        :param sender (str): Username of the deleter.
+        """
+        msg = {
+            "type": "channel_deleted",
+            "channel": channel_name,
+            "sender": sender or self.username,
+            "sender_ip": self.ip,
+            "sender_port": self.port,
+            "timestamp": get_timestamp(),
+        }
+        with self._lock:
+            peers = list(self.connected_peers.keys())
+        for (pip, pport) in peers:
+            self._send_to_peer(pip, pport, msg)
+
+    def delete_channel(self, channel_name):
+        """Remove a channel from this peer's local state.
+
+        :param channel_name (str): Channel to remove.
+        :rtype: bool - True if removed, False if not found.
+        """
+        with self._lock:
+            if channel_name in self.channels:
+                del self.channels[channel_name]
+                return True
+            return False
 
     def get_channels(self):
         """Get list of channel names.
