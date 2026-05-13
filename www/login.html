@@ -1,8 +1,172 @@
-<html><body>
-<h1>Login</h1>
-<form method="POST" action="/login">
-  Username: <input name="username" type="text"><br>
-  Password: <input name="password" type="password"><br>
-  <input type="submit" value="Login">
-</form>
-</body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HybridChat - Login</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: monospace;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      padding: 36px 40px;
+      width: 360px;
+    }
+    h1 {
+      text-align: center;
+      color: #53d8fb;
+      font-size: 20px;
+      margin-bottom: 4px;
+      letter-spacing: 1px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #666;
+      font-size: 11px;
+      margin-bottom: 28px;
+    }
+    label {
+      display: block;
+      font-size: 11px;
+      color: #aaa;
+      margin-bottom: 4px;
+      margin-top: 14px;
+    }
+    input {
+      width: 100%;
+      background: #0a0a1a;
+      color: #e0e0e0;
+      border: 1px solid #0f3460;
+      padding: 8px 10px;
+      font-family: monospace;
+      font-size: 13px;
+      outline: none;
+    }
+    input:focus { border-color: #53d8fb; }
+    button {
+      width: 100%;
+      background: #0f3460;
+      color: #fff;
+      border: none;
+      padding: 10px;
+      cursor: pointer;
+      font-family: monospace;
+      font-size: 14px;
+      margin-top: 22px;
+      letter-spacing: 1px;
+    }
+    button:hover { background: #53d8fb; color: #000; }
+    #error {
+      color: #f44336;
+      font-size: 12px;
+      text-align: center;
+      margin-top: 12px;
+      min-height: 16px;
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #0f3460;
+      margin: 28px 0 16px;
+    }
+    .register-link {
+      text-align: center;
+      font-size: 11px;
+      color: #666;
+    }
+    .register-link a {
+      color: #53d8fb;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .register-link a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>HybridChat</h1>
+    <div class="subtitle">CO3093 / CO3094 — Non-blocking P2P Chat</div>
+
+    <label>Username</label>
+    <input id="username" type="text" placeholder="Enter username" autofocus>
+
+    <label>Password</label>
+    <input id="password" type="password" placeholder="Enter password"
+           onkeydown="if(event.key==='Enter') doLogin()">
+
+    <button onclick="doLogin()">LOGIN</button>
+    <div id="error"></div>
+
+    <hr class="divider">
+    <div class="register-link">
+      No account? &nbsp;
+      <a onclick="doRegister()">Register here</a>
+    </div>
+  </div>
+
+  <script>
+    async function doLogin() {
+      var u = document.getElementById('username').value.trim();
+      var p = document.getElementById('password').value;
+      document.getElementById('error').textContent = '';
+      if (!u || !p) { document.getElementById('error').textContent = 'Please enter username and password'; return; }
+
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/login', true);
+      xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+      xhr.onload = function() {
+        try {
+          var data = JSON.parse(xhr.responseText);
+          if (data.status === 'success') {
+            localStorage.setItem('session_id', data.session_id);
+            localStorage.setItem('current_user', u);
+            window.location.href = '/chat.html';
+          } else {
+            document.getElementById('error').textContent = data.error || 'Invalid credentials';
+          }
+        } catch(e) {
+          document.getElementById('error').textContent = 'Server error';
+        }
+      };
+      xhr.onerror = function() { document.getElementById('error').textContent = 'Connection error'; };
+      xhr.send('username=' + encodeURIComponent(u) + '&password=' + encodeURIComponent(p));
+    }
+
+    async function doRegister() {
+      var u = document.getElementById('username').value.trim();
+      var p = document.getElementById('password').value;
+      document.getElementById('error').textContent = '';
+      if (!u || !p) { document.getElementById('error').textContent = 'Enter username and password to register'; return; }
+      if (u.length < 3) { document.getElementById('error').textContent = 'Username must be ≥3 characters'; return; }
+      if (p.length < 4) { document.getElementById('error').textContent = 'Password must be ≥4 characters'; return; }
+
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/register', true);
+      xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+      xhr.onload = function() {
+        try {
+          var data = JSON.parse(xhr.responseText);
+          if (data.status === 'registered') {
+            document.getElementById('error').style.color = '#4caf50';
+            document.getElementById('error').textContent = 'Registered! You can now login.';
+          } else {
+            document.getElementById('error').style.color = '#f44336';
+            document.getElementById('error').textContent = data.error || 'Registration failed';
+          }
+        } catch(e) {
+          document.getElementById('error').textContent = 'Server error';
+        }
+      };
+      xhr.onerror = function() { document.getElementById('error').textContent = 'Connection error'; };
+      xhr.send('username=' + encodeURIComponent(u) + '&password=' + encodeURIComponent(p));
+    }
+  </script>
+</body>
+</html>
