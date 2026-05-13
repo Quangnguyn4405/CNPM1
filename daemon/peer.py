@@ -184,12 +184,15 @@ class PeerNode:
 
         elif msg_type == "channel_created":
             channel = msg.get("channel", "")
+            members = msg.get("members")  # None = public, list = private
             if channel:
-                with self._lock:
-                    if channel not in self.channels:
-                        self.channels[channel] = []
-                if self.on_channel_created:
-                    self.on_channel_created(channel)
+                # Only join if public or this peer is an invited member
+                if members is None or self.username in members:
+                    with self._lock:
+                        if channel not in self.channels:
+                            self.channels[channel] = []
+                    if self.on_channel_created:
+                        self.on_channel_created(channel, members)
 
         elif msg_type == "chat":
             # Skip own messages echoed back via P2P
@@ -396,15 +399,17 @@ class PeerNode:
                 self.connected_peers.pop((peer_ip, peer_port), None)
             return False
 
-    def broadcast_channel_created(self, channel_name, sender=None):
+    def broadcast_channel_created(self, channel_name, sender=None, members=None):
         """Notify all connected peers that a new channel was created.
 
         :param channel_name (str): Name of the new channel.
         :param sender (str): Username of the creator.
+        :param members (set|None): Invited usernames, or None for public.
         """
         msg = {
             "type": "channel_created",
             "channel": channel_name,
+            "members": list(members) if members is not None else None,
             "sender": sender or self.username,
             "sender_ip": self.ip,
             "sender_port": self.port,

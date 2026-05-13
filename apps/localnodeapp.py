@@ -74,8 +74,9 @@ peer_lock = threading.Lock()
 session_peers = {}
 session_peers_lock = threading.Lock()
 
-# Central channel registry for this node
-channel_registry = {"general"}
+# Central channel registry: {name: {"members": None|set, "creator": str}}
+# members=None means public (visible to all)
+channel_registry = {"general": {"members": None, "creator": "system"}}
 channel_registry_lock = threading.Lock()
 
 
@@ -208,10 +209,14 @@ def _error(msg, code=400):
     return json.dumps({"error": msg, "status": code}).encode("utf-8")
 
 
-def _on_channel_created(channel_name):
+def _on_channel_created(channel_name, members):
     """Callback: a peer notified us of a new channel — add to local registry."""
     with channel_registry_lock:
-        channel_registry.add(channel_name)
+        if channel_name not in channel_registry:
+            channel_registry[channel_name] = {
+                "members": set(members) if members is not None else None,
+                "creator": None,
+            }
 
 
 # ============================================================
@@ -539,21 +544,26 @@ def send_peer(headers="", body=""):
 
 @app.route('/channels', methods=['GET'])
 def channels(headers="", body=""):
-    """List all known channels from the local registry.
+    """List channels visible to the current user.
 
-    Response: JSON list of channel names.
+    Public channels (members=None) visible to all.
+    Private channels only visible to invited members.
     """
+    username, _ = _auth_check(headers)
     with channel_registry_lock:
-        ch_list = sorted(channel_registry)
+        ch_list = sorted(
+            name for name, info in channel_registry.items()
+            if info["members"] is None or (username and username in info["members"])
+        )
     return _json_response({"channels": ch_list})
 
 
 @app.route('/create-channel', methods=['POST'])
 def create_channel(headers="", body=""):
-    """Create a new channel and broadcast it to connected peers.
+    """Create a new channel, optionally restricted to specific members.
 
-    Request body: {"channel": "channel_name"}
-    Response: JSON confirmation.
+    Request body: {"channel": "name", "members": ["user1","user2"]}
+    Omit "members" or pass null for a public channel.
     """
     username, hdr = _auth_check(headers)
     if not username:
@@ -567,15 +577,21 @@ def create_channel(headers="", body=""):
     if not channel_name:
         return _error("Missing 'channel' name")
 
+    members_list = body_data.get("members")  # None = public
+    if members_list is not None:
+        members = set(members_list)
+        members.add(username)
+    else:
+        members = None
+
     with channel_registry_lock:
         already_exists = channel_name in channel_registry
-        channel_registry.add(channel_name)
+        if not already_exists:
+            channel_registry[channel_name] = {"members": members, "creator": username}
 
     peer.create_channel(channel_name)
-
-    # Broadcast a system message so connected peers learn about the new channel
     if not already_exists:
-        peer.broadcast_channel_created(channel_name, username)
+        peer.broadcast_channel_created(channel_name, username, members)
 
     if already_exists:
         return _json_response({"status": "exists", "channel": channel_name,

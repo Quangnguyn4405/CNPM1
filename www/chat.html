@@ -207,6 +207,36 @@
       color: #000;
       font-weight: bold;
     }
+
+    #member-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 4px 0 2px 0;
+    }
+
+    .member-cb-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: #0a0a1a;
+      border: 1px solid #0f3460;
+      padding: 3px 10px;
+      border-radius: 10px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #e0e0e0;
+    }
+
+    .member-cb-label:hover {
+      border-color: #53d8fb;
+    }
+
+    .member-cb-label input[type=checkbox] {
+      width: auto;
+      margin: 0;
+      accent-color: #53d8fb;
+    }
     #session-bar {
       background: #0f3460;
       padding: 6px 12px;
@@ -302,9 +332,14 @@
       </div>
       <div class="row">
         <label style="width:80px; color:#aaa; font-size:11px;">New channel:</label>
-        <input type="text" id="new-channel" placeholder="channel name" style="width:160px;">
+        <input type="text" id="new-channel" placeholder="channel name" style="width:150px;"
+               onfocus="doLoadUsers()">
         <button onclick="doCreateChannel()">Add Channel</button>
         <span id="channel-status" class="status" style="font-size:11px;"></span>
+      </div>
+      <div class="row" id="member-row" style="display:none; align-items:flex-start;">
+        <label style="width:80px; color:#aaa; font-size:11px; padding-top:4px;">Invite:</label>
+        <div id="member-picker"><span style="color:#555; font-size:11px;">Loading users...</span></div>
       </div>
       <div id="channel-list"></div>
       <div id="messages"></div>
@@ -593,14 +628,45 @@
       doGetMessages();
     }
 
+    var _usersLoaded = false;
+
+    async function doLoadUsers() {
+      if (_usersLoaded) return;
+      document.getElementById('member-row').style.display = 'flex';
+      const res = await apiCall('GET', '/users');
+      if (!res.users) return;
+      const picker = document.getElementById('member-picker');
+      const others = res.users.filter(function(u) { return u.username !== currentUser; });
+      if (others.length === 0) {
+        picker.innerHTML = '<span style="color:#555; font-size:11px;">No other users found</span>';
+      } else {
+        picker.innerHTML = others.map(function(u) {
+          return '<label class="member-cb-label">' +
+            '<input type="checkbox" class="member-cb" value="' + escHtml(u.username) + '">' +
+            escHtml(u.username) + '</label>';
+        }).join('');
+      }
+      _usersLoaded = true;
+    }
+
     async function doCreateChannel() {
       const name = document.getElementById('new-channel').value.trim();
       if (!name) { setStatus('channel-status', 'Enter a channel name', true); return; }
-      const res = await apiCall('POST', '/create-channel', { channel: name });
+
+      const checked = document.querySelectorAll('.member-cb:checked');
+      const members = checked.length > 0
+        ? [currentUser].concat(Array.from(checked).map(function(cb) { return cb.value; }))
+        : null;  // null = public channel
+
+      const res = await apiCall('POST', '/create-channel', { channel: name, members: members });
       log('CREATE-CHANNEL: ' + JSON.stringify(res));
       if (res.status === 'created' || res.status === 'exists') {
-        setStatus('channel-status', res.status === 'created' ? 'Channel created' : 'Already exists', res.status === 'exists');
+        const label = res.status === 'created'
+          ? (members ? 'Private channel created (' + members.length + ' members)' : 'Public channel created')
+          : 'Already exists';
+        setStatus('channel-status', label, res.status === 'exists');
         document.getElementById('new-channel').value = '';
+        document.querySelectorAll('.member-cb').forEach(function(cb) { cb.checked = false; });
         switchChannel(name);
         doListChannels();
       } else {
